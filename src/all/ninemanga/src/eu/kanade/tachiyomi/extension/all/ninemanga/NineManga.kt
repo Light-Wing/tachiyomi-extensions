@@ -15,7 +15,7 @@ import okhttp3.HttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-
+//TODO make this sfw
 open class NineManga(override val name: String, override val baseUrl: String, override val lang: String) : ParsedHttpSource() {
 
     override val supportsLatest: Boolean = true

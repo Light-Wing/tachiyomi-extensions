@@ -9,3 +9,6 @@ build/
 repo/
 apk/
 gen
+/src/not_needed/
+/src/scan_groups/
+/src/nsfw/*/

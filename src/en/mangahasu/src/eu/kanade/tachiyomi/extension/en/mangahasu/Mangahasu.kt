@@ -19,7 +19,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-
+//TODO make this sfw
 class Mangahasu : ParsedHttpSource() {
 
     override val name = "Mangahasu"

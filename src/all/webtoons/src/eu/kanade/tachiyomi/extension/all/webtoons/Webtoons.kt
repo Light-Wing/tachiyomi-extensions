@@ -15,7 +15,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-
+//TODO make this sfw
 abstract class Webtoons(
     override val lang: String,
     open val langCode: String = lang,
