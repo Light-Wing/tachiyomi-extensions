@@ -9,9 +9,3 @@ build/
 repo/
 apk/
 gen
-/src/not_needed/
-/src/scan_groups/
-/src/nsfw/*/
-/src/nsfw/myhentaicomics/
-/src/nsfw/myhentaigallery/
-/src/nsfw/oglaf/

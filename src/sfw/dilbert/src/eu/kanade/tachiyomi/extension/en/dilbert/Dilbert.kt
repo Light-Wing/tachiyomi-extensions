@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.dilbert
 
 import android.os.Build.VERSION
-import eu.kanade.tachiyomi.extension.BuildConfig
+//import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.lib.ratelimit.RateLimitInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -35,7 +35,7 @@ class Dilbert : ParsedHttpSource() {
 
     private val userAgent = "Mozilla/5.0 " +
         "(Android ${VERSION.RELEASE}; Mobile) " +
-        "Tachiyomi/${BuildConfig.VERSION_NAME}"
+        "Tachiyomi/latest"//${BuildConfig.VERSION_NAME}"
 
     private val dateFormat = SimpleDateFormat("EEEE MMMM dd, yyyy", Locale.US)
 
@@ -62,7 +62,8 @@ class Dilbert : ParsedHttpSource() {
         }, false))
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = fetchPopularManga(page)
+    //removing search since it always returns the same info as browse anyway...
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException("This method should not be called!")//fetchPopularManga(page)
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
         Observable.just(manga.apply { initialized = true })
