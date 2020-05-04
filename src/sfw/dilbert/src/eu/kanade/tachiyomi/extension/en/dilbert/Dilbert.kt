@@ -19,7 +19,11 @@ import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-//TODO make this sfw
+/**
+* My changes:
+* removed search it was useless
+*
+*/
 class Dilbert : ParsedHttpSource() {
 
     override val name = "Dilbert"
