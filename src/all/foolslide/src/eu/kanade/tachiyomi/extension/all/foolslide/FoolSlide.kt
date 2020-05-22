@@ -123,10 +123,10 @@ abstract class FoolSlide(
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            document.select(mangaDetailsInfoSelector).firstOrNull()?.text()?.let { infoElement ->
-                author = infoElement.substringAfter("Author:").substringBefore("Artist:")
-                artist = infoElement.substringAfter("Artist:").substringBefore("Synopsis:")
-                description = infoElement.substringAfter("Synopsis:")
+            document.select(mangaDetailsInfoSelector).firstOrNull()?.html()?.let { infoHtml ->
+                author = Regex("""Author</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(1)
+                artist = Regex("""Artist</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(1)
+                description = Regex("""(Synopsis|Description)</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(2)
             }
             thumbnail_url = getDetailsThumbnail(document)
         }
@@ -169,26 +169,31 @@ abstract class FoolSlide(
 
         // Handle 'yesterday' and 'today', using midnight
         var relativeDate: Calendar? = null
-        if (lcDate.startsWith("yesterday")) {
-            relativeDate = Calendar.getInstance()
-            relativeDate.add(Calendar.DAY_OF_MONTH, -1) // yesterday
-            relativeDate.set(Calendar.HOUR_OF_DAY, 0)
-            relativeDate.set(Calendar.MINUTE, 0)
-            relativeDate.set(Calendar.SECOND, 0)
-            relativeDate.set(Calendar.MILLISECOND, 0)
-        } else if (lcDate.startsWith("today")) {
-            relativeDate = Calendar.getInstance()
-            relativeDate.set(Calendar.HOUR_OF_DAY, 0)
-            relativeDate.set(Calendar.MINUTE, 0)
-            relativeDate.set(Calendar.SECOND, 0)
-            relativeDate.set(Calendar.MILLISECOND, 0)
-        } else if (lcDate.startsWith("tomorrow")) {
-            relativeDate = Calendar.getInstance()
-            relativeDate.add(Calendar.DAY_OF_MONTH, +1) // tomorrow
-            relativeDate.set(Calendar.HOUR_OF_DAY, 0)
-            relativeDate.set(Calendar.MINUTE, 0)
-            relativeDate.set(Calendar.SECOND, 0)
-            relativeDate.set(Calendar.MILLISECOND, 0)
+        // Result parsed but no year, copy current year over
+        when {
+            lcDate.startsWith("yesterday") -> {
+                relativeDate = Calendar.getInstance()
+                relativeDate.add(Calendar.DAY_OF_MONTH, -1) // yesterday
+                relativeDate.set(Calendar.HOUR_OF_DAY, 0)
+                relativeDate.set(Calendar.MINUTE, 0)
+                relativeDate.set(Calendar.SECOND, 0)
+                relativeDate.set(Calendar.MILLISECOND, 0)
+            }
+            lcDate.startsWith("today") -> {
+                relativeDate = Calendar.getInstance()
+                relativeDate.set(Calendar.HOUR_OF_DAY, 0)
+                relativeDate.set(Calendar.MINUTE, 0)
+                relativeDate.set(Calendar.SECOND, 0)
+                relativeDate.set(Calendar.MILLISECOND, 0)
+            }
+            lcDate.startsWith("tomorrow") -> {
+                relativeDate = Calendar.getInstance()
+                relativeDate.add(Calendar.DAY_OF_MONTH, +1) // tomorrow
+                relativeDate.set(Calendar.HOUR_OF_DAY, 0)
+                relativeDate.set(Calendar.MINUTE, 0)
+                relativeDate.set(Calendar.SECOND, 0)
+                relativeDate.set(Calendar.MILLISECOND, 0)
+            }
         }
 
         relativeDate?.timeInMillis?.let {

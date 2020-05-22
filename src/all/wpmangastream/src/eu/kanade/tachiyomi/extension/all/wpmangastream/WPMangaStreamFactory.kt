@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.wpmangastream
 
-import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.Source
@@ -11,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import java.io.IOException
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -32,7 +33,10 @@ class WPMangaStreamFactory : SourceFactory {
         MaidManga(),
         SekteKomik(),
         MangaSwat(),
-        MangaRaw()
+        MangaRaw(),
+        SekteDoujin(),
+        NonStopScans(),
+        KomikTap()
     )
 }
 
@@ -103,25 +107,6 @@ class KomikCast : WPMangaStream("Komik Cast (WP Manga Stream)", "https://komikca
             manga.setUrlWithoutDomain(it.attr("href"))
             manga.title = it.attr("title")
         }
-        return manga
-    }
-
-    override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("div.spe").first()
-        val sepName = infoElement.select(".spe > span:nth-child(4)").last()
-        val manga = SManga.create()
-        manga.author = sepName.ownText()
-        manga.artist = sepName.ownText()
-        val genres = mutableListOf<String>()
-        infoElement.select(".spe > span:nth-child(1) > a").forEach { element ->
-            val genre = element.text()
-            genres.add(genre)
-        }
-        manga.genre = genres.joinToString(", ")
-        manga.status = parseStatus(infoElement.select(".spe > span:nth-child(2)").text())
-        manga.description = document.select("div[^itemprop]").last().text()
-        manga.thumbnail_url = document.select(".thumb > img:nth-child(1)").attr("src")
-
         return manga
     }
 
@@ -202,12 +187,6 @@ class WestManga : WPMangaStream("West Manga (WP Manga Stream)", "https://westman
         manga.description = descElement.select("p").text()
         manga.thumbnail_url = document.select(".topinfo > img").attr("src")
         return manga
-    }
-
-    @SuppressLint("DefaultLocale")
-    override fun parseStatus(element: String): Int = when {
-        element.toLowerCase().contains("publishing") -> SManga.ONGOING
-        else -> SManga.UNKNOWN
     }
 
     private class SortByFilter : UriPartFilter("Sort By", arrayOf(
@@ -390,7 +369,7 @@ class KomikGo : WPMangaStream("Komik GO (WP Manga Stream)", "https://komikgo.com
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("div.reading-content * img").mapIndexed { i, img ->
-            Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
+            Page(i, "", img.imgAttr())
         }
     }
 
@@ -486,150 +465,13 @@ class KomikGo : WPMangaStream("Komik GO (WP Manga Stream)", "https://komikgo.com
         Genre("Yuri", "yuri")
     )
 }
+
 class KomikIndo : WPMangaStream("Komik Indo (WP Manga Stream)", "https://www.komikindo.web.id", "id") {
-
-    override fun popularMangaRequest(page: Int): Request {
-        val url = if (page == 1) baseUrl else "$baseUrl/page/$page"
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = if (page == 1) "$baseUrl/manga/" else "$baseUrl/manga/page/$page"
-        return GET(url, headers)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var builtUrl = if (page == 1) "$baseUrl/manga/" else "$baseUrl/manga/page/$page/"
-        if (query != "") {
-            builtUrl = if (page == 1) "$baseUrl/search/$query/" else "$baseUrl/search/$query/page/$page/"
-        } else if (filters.size > 0) {
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreListFilter -> {
-                        builtUrl = if (page == 1) "$baseUrl/genres/" + filter.toUriPart() else "$baseUrl/genres/" + filter.toUriPart() + "/page/$page/"
-                    }
-                }
-            }
-        }
-        val url = HttpUrl.parse(builtUrl)!!.newBuilder()
-        return GET(url.build().toString(), headers)
-    }
-
-    override fun popularMangaSelector() = "div.lchap > .lch > .ch"
-    override fun latestUpdatesSelector() = "div.ctf > div.lsmin > div.chl"
-    override fun searchMangaSelector() = latestUpdatesSelector()
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = element.select("div.thumbnail img").first().attr("src")
-        element.select("div.l > h3 > a").first().let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.text()
-        }
-        return manga
-    }
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = element.select("div.thumbnail img").first().attr("src")
-        element.select("div.chlf > h2 > a").first().let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.text()
-        }
-        return manga
-    }
-
-    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
-
-    @SuppressLint("DefaultLocale")
-    override fun mangaDetailsParse(document: Document): SManga {
-        val infoElm = document.select(".listinfo > ul > li")
-        val manga = SManga.create()
-        infoElm.forEach { elmt ->
-            val infoTitle = elmt.select("b").text().toLowerCase()
-            val infoContent = elmt.text()
-            when {
-                infoTitle.contains("status") -> manga.status = parseStatus(infoContent)
-                infoTitle.contains("author") -> manga.author = infoContent
-                infoTitle.contains("artist") -> manga.artist = infoContent
-                infoTitle.contains("genres") -> {
-                    val genres = mutableListOf<String>()
-                    elmt.select("a").forEach {
-                        val genre = it.text()
-                        genres.add(genre)
-                    }
-                    manga.genre = genres.joinToString(", ")
-                }
-            }
-        }
-        manga.description = document.select("div.rm > span > p:first-child").text()
-        manga.thumbnail_url = document.select("div.animeinfo .lm .imgdesc img:first-child").attr("src")
-        return manga
-    }
-
-    private class GenreListFilter : UriPartFilter("Genre", arrayOf(
-        Pair("Default", ""),
-        Pair("4-Koma", "4-koma"),
-        Pair("Action", "action"),
-        Pair("Adventure", "adventure"),
-        Pair("Comedy", "comedy"),
-        Pair("Cooking", "cooking"),
-        Pair("Crime", "crime"),
-        Pair("Dark Fantasy", "dark-fantasy"),
-        Pair("Demons", "demons"),
-        Pair("Drama", "drama"),
-        Pair("Ecchi", "ecchi"),
-        Pair("Fantasy", "fantasy"),
-        Pair("Game", "game"),
-        Pair("Gender Bender", "gender-bender"),
-        Pair("Harem", "harem"),
-        Pair("Historical", "historical"),
-        Pair("Horor", "horor"),
-        Pair("Horror", "horror"),
-        Pair("Isekai", "isekai"),
-        Pair("Josei", "josei"),
-        Pair("Komik Tamat", "komik-tamat"),
-        Pair("Life", "life"),
-        Pair("Magic", "magic"),
-        Pair("Manhua", "manhua"),
-        Pair("Martial Art", "martial-art"),
-        Pair("Martial Arts", "martial-arts"),
-        Pair("Mature", "mature"),
-        Pair("Mecha", "mecha"),
-        Pair("Military", "military"),
-        Pair("Music", "music"),
-        Pair("Mystery", "mystery"),
-        Pair("Post-Apocalyptic", "post-apocalyptic"),
-        Pair("Psychological", "psychological"),
-        Pair("Romance", "romance"),
-        Pair("School", "school"),
-        Pair("School Life", "school-life"),
-        Pair("Sci-Fi", "sci-fi"),
-        Pair("Seinen", "seinen"),
-        Pair("Shonen", "shonen"),
-        Pair("Shoujo", "shoujo"),
-        Pair("Shounen", "shounen"),
-        Pair("Slice of Life", "slice-of-life"),
-        Pair("Sports", "sports"),
-        Pair("Super Power", "super-power"),
-        Pair("Superheroes", "superheroes"),
-        Pair("Supernatural", "supernatural"),
-        Pair("Survival", "survival"),
-        Pair("Thriller", "thriller"),
-        Pair("Tragedy", "tragedy"),
-        Pair("Zombies", "zombies")
-    ))
-
-    override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: filter will be ignored when using text search!"),
-        GenreListFilter()
-    )
-
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga/?page=$page&order=popular", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/?page=$page&order=latest", headers)
+    override fun popularMangaNextPageSelector() = "a.r"
 }
+
 class MaidManga : WPMangaStream("Maid Manga (WP Manga Stream)", "https://www.maid.my.id", "id") {
     override fun latestUpdatesSelector() = "h2:contains(Update Chapter) + div.row div.col-12"
     override fun latestUpdatesRequest(page: Int): Request {
@@ -805,40 +647,103 @@ class MaidManga : WPMangaStream("Maid Manga (WP Manga Stream)", "https://www.mai
 }
 
 class MangaSwat : WPMangaStream("MangaSwat", "https://mangaswat.com", "ar") {
+    /**
+     * Use IOException or the app crashes!
+     * x-sucuri-cache header is never present on images; specify webpages or glide won't load images!
+     */
     private class Sucuri : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
-            val originalRequest = chain.request()
-            val response = chain.proceed(originalRequest)
-            if (response.headers().get("x-sucuri-cache").isNullOrEmpty()) throw Exception("Site protected, open webview | موقع محمي ، عرض ويب مفتوح")
+            val response = chain.proceed(chain.request())
+            if (response.header("x-sucuri-cache").isNullOrEmpty() && response.request().url().toString().contains("//mangaswat.com"))
+                throw IOException("Site protected, open webview | موقع محمي ، عرض ويب مفتوح")
             return response
         }
     }
     override val client: OkHttpClient = super.client.newBuilder().addInterceptor(Sucuri()).build()
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        thumbnail_url = document.select("div.thumb img.lazyload").attr("data-src")
-        title = document.select("div.infox h1").text()
-        genre = document.select("div.spe [rel=tag]").joinToString(", ") { it.text() }
-        status = when (document.select("span:contains(الحالة)").text().substringAfter(":").trim()) {
-            "Ongoing" -> SManga.ONGOING
-            "Completed" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("Referer", baseUrl)
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:76.0) Gecko/20100101 Firefox/76.0")
+        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3")
+
+    override fun popularMangaNextPageSelector() = "div.hpage a.r"
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        return SManga.create().apply {
+            document.select("div.bigcontent").firstOrNull()?.let { infoElement ->
+                genre = infoElement.select("span:contains(التصنيف) a").joinToString { it.text() }
+                status = parseStatus(infoElement.select("span:contains(الحالة)").firstOrNull()?.ownText())
+                author = infoElement.select("span:contains(المؤلف) i").firstOrNull()?.ownText()
+                artist = author
+                description = infoElement.select("div.desc").text()
+                thumbnail_url = infoElement.select("img").imgAttr()
+            }
         }
-        author = document.select("span:contains(المؤلف)").text().substringAfter(":").trim()
-        artist = author
-        description = document.select("div[itemprop=articleBody]").text()
     }
     override fun pageListRequest(chapter: SChapter): Request {
         return GET(baseUrl + chapter.url + "?/", headers) // Bypass "linkvertise" ads
     }
-    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
-        document.select("div#readerarea img[data-src]").forEachIndexed { index, element ->
-            add(Page(index, "", element.attr("data-src")))
-        }
-    }
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headers)
-    }
+
+    override fun getFilterList() = FilterList(
+        StatusFilter(),
+        TypeFilter(),
+        SortByFilter(),
+        GenreListFilter(getGenrePairs())
+    )
+
+    private class GenreListFilter(pairs: Array<Pair<String, String>>) : UriPartFilter("Genre", pairs)
+
+    private fun getGenrePairs() = arrayOf(
+        Pair("<--->", ""),
+        Pair("آلات", "%d8%a2%d9%84%d8%a7%d8%aa"),
+        Pair("أكشن", "%d8%a3%d9%83%d8%b4%d9%86"),
+        Pair("إثارة", "%d8%a5%d8%ab%d8%a7%d8%b1%d8%a9"),
+        Pair("إعادة", "%d8%a5%d8%b9%d8%a7%d8%af%d8%a9-%d8%a5%d8%ad%d9%8a%d8%a7%d8%a1"),
+        Pair("الحياة", "%d8%a7%d9%84%d8%ad%d9%8a%d8%a7%d8%a9-%d8%a7%d9%84%d9%85%d8%af%d8%b1%d8%b3%d9%8a%d8%a9"),
+        Pair("الحياة", "%d8%a7%d9%84%d8%ad%d9%8a%d8%a7%d8%a9-%d8%a7%d9%84%d9%8a%d9%88%d9%85%d9%8a%d8%a9"),
+        Pair("العاب", "%d8%a7%d9%84%d8%b9%d8%a7%d8%a8-%d9%81%d9%8a%d8%af%d9%8a%d9%88"),
+        Pair("ايتشي", "%d8%a7%d9%8a%d8%aa%d8%b4%d9%8a"),
+        Pair("ايسكاي", "%d8%a7%d9%8a%d8%b3%d9%83%d8%a7%d9%8a"),
+        Pair("بالغ", "%d8%a8%d8%a7%d9%84%d8%ba"),
+        Pair("تاريخي", "%d8%aa%d8%a7%d8%b1%d9%8a%d8%ae%d9%8a"),
+        Pair("تراجيدي", "%d8%aa%d8%b1%d8%a7%d8%ac%d9%8a%d8%af%d9%8a"),
+        Pair("جوسيه", "%d8%ac%d9%88%d8%b3%d9%8a%d9%87"),
+        Pair("جيندر", "%d8%ac%d9%8a%d9%86%d8%af%d8%b1-%d8%a8%d9%86%d8%af%d8%b1"),
+        Pair("حربي", "%d8%ad%d8%b1%d8%a8%d9%8a"),
+        Pair("حريم", "%d8%ad%d8%b1%d9%8a%d9%85"),
+        Pair("خارق", "%d8%ae%d8%a7%d8%b1%d9%82-%d9%84%d9%84%d8%b7%d8%a8%d9%8a%d8%b9%d8%a9"),
+        Pair("خيال", "%d8%ae%d9%8a%d8%a7%d9%84"),
+        Pair("خيال", "%d8%ae%d9%8a%d8%a7%d9%84-%d8%b9%d9%84%d9%85%d9%8a"),
+        Pair("دراما", "%d8%af%d8%b1%d8%a7%d9%85%d8%a7"),
+        Pair("دموي", "%d8%af%d9%85%d9%88%d9%8a"),
+        Pair("رعب", "%d8%b1%d8%b9%d8%a8"),
+        Pair("رومانسي", "%d8%b1%d9%88%d9%85%d8%a7%d9%86%d8%b3%d9%8a"),
+        Pair("رياضة", "%d8%b1%d9%8a%d8%a7%d8%b6%d8%a9"),
+        Pair("زمكاني", "%d8%b2%d9%85%d9%83%d8%a7%d9%86%d9%8a"),
+        Pair("زومبي", "%d8%b2%d9%88%d9%85%d8%a8%d9%8a"),
+        Pair("سحر", "%d8%b3%d8%ad%d8%b1"),
+        Pair("سينين", "%d8%b3%d9%8a%d9%86%d9%8a%d9%86"),
+        Pair("شريحة", "%d8%b4%d8%b1%d9%8a%d8%ad%d8%a9-%d9%85%d9%86-%d8%a7%d9%84%d8%ad%d9%8a%d8%a7%d8%a9"),
+        Pair("شوجو", "%d8%b4%d9%88%d8%ac%d9%88"),
+        Pair("شونين", "%d8%b4%d9%88%d9%86%d9%8a%d9%86"),
+        Pair("شياطين", "%d8%b4%d9%8a%d8%a7%d8%b7%d9%8a%d9%86"),
+        Pair("طبخ", "%d8%b7%d8%a8%d8%ae"),
+        Pair("طبي", "%d8%b7%d8%a8%d9%8a"),
+        Pair("غموض", "%d8%ba%d9%85%d9%88%d8%b6"),
+        Pair("فانتازي", "%d9%81%d8%a7%d9%86%d8%aa%d8%a7%d8%b2%d9%8a"),
+        Pair("فنون", "%d9%81%d9%86%d9%88%d9%86-%d9%82%d8%aa%d8%a7%d9%84%d9%8a%d8%a9"),
+        Pair("فوق", "%d9%81%d9%88%d9%82-%d8%a7%d9%84%d8%b7%d8%a8%d9%8a%d8%b9%d8%a9"),
+        Pair("قوى", "%d9%82%d9%88%d9%89-%d8%ae%d8%a7%d8%b1%d9%82%d8%a9"),
+        Pair("كوميدي", "%d9%83%d9%88%d9%85%d9%8a%d8%af%d9%8a"),
+        Pair("لعبة", "%d9%84%d8%b9%d8%a8%d8%a9"),
+        Pair("مافيا", "%d9%85%d8%a7%d9%81%d9%8a%d8%a7"),
+        Pair("مصاصى", "%d9%85%d8%b5%d8%a7%d8%b5%d9%89-%d8%a7%d9%84%d8%af%d9%85%d8%a7%d8%a1"),
+        Pair("مغامرات", "%d9%85%d8%ba%d8%a7%d9%85%d8%b1%d8%a7%d8%aa"),
+        Pair("ميكا", "%d9%85%d9%8a%d9%83%d8%a7"),
+        Pair("نفسي", "%d9%86%d9%81%d8%b3%d9%8a"),
+        Pair("وحوش", "%d9%88%d8%ad%d9%88%d8%b4"),
+        Pair("ويب-تون", "%d9%88%d9%8a%d8%a8-%d8%aa%d9%88%d9%86")
+    )
 }
 
 class MangaRaw : WPMangaStream("Manga Raw", "https://mangaraw.org", "ja") {
@@ -858,6 +763,8 @@ class MangaRaw : WPMangaStream("Manga Raw", "https://mangaraw.org", "ja") {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         GET("$baseUrl/search?s=$query&page=$page")
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document)
+        .apply { description = document.select("div.bottom").firstOrNull()?.ownText() }
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return client.newCall(pageListRequest(chapter))
             .asObservableSuccess()
@@ -872,4 +779,18 @@ class MangaRaw : WPMangaStream("Manga Raw", "https://mangaraw.org", "ja") {
     }
     override fun imageUrlParse(document: Document): String = document.select("a.img-block img").attr("abs:src")
     override fun getFilterList(): FilterList = FilterList()
+}
+
+class SekteDoujin : WPMangaStream("Sekte Doujin", "https://sektedoujin.com", "id")
+
+class NonStopScans : WPMangaStream("Non-Stop Scans", "https://www.nonstopscans.com", "en")
+
+class KomikTap : WPMangaStream("KomikTap", "https://komiktap.xyz", "id") {
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga/?page=$page&order=popular", headers)
+    override fun popularMangaNextPageSelector() = "a.r"
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga/?page=$page&order=update", headers)
+    // Source's search is semi-broken, filtered search returns "no results" for page > 1
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/cari-manga/$query/page/$page/")
+    override fun searchMangaNextPageSelector() = "a.next.page-numbers"
+    override fun getFilterList() = FilterList()
 }

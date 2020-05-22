@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.tapastic
 
+import android.app.Application
+import android.content.SharedPreferences
 import android.net.Uri
+import android.support.v7.preference.ListPreference
+import android.support.v7.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,14 +20,68 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
-class Tapastic : ParsedHttpSource() {
+class Tapastic : ConfigurableSource, ParsedHttpSource() {
+
+    // Preferences Code
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+        val chapterListPref = androidx.preference.ListPreference(screen.context).apply {
+            key = SHOW_LOCKED_CHAPTERS_Title
+            title = SHOW_LOCKED_CHAPTERS_Title
+            entries = prefsEntries
+            entryValues = prefsEntryValues
+            summary = "%s"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = this.findIndexOfValue(selected)
+                val entry = entryValues[index] as String
+                preferences.edit().putString(SHOW_LOCKED_CHAPTERS, entry).commit()
+            }
+        }
+        screen.addPreference(chapterListPref)
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val chapterListPref = ListPreference(screen.context).apply {
+            key = SHOW_LOCKED_CHAPTERS_Title
+            title = SHOW_LOCKED_CHAPTERS_Title
+            entries = prefsEntries
+            entryValues = prefsEntryValues
+            summary = "%s"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = this.findIndexOfValue(selected)
+                val entry = entryValues[index] as String
+                preferences.edit().putString(SHOW_LOCKED_CHAPTERS, entry).commit()
+            }
+        }
+        screen.addPreference(chapterListPref)
+    }
+
+    private fun chapterListPref() = preferences.getString(SHOW_LOCKED_CHAPTERS, "free")
+
+    companion object {
+        private const val SHOW_LOCKED_CHAPTERS_Title = "Tapas requires login/payment for some chapters"
+        private const val SHOW_LOCKED_CHAPTERS = "tapas_locked_chapters"
+        private val prefsEntries = arrayOf("Show all chapters (including pay-to-read)", "Only show free chapters")
+        private val prefsEntryValues = arrayOf("all", "free")
+    }
 
     // Info
     override val lang = "en"
     override val supportsLatest = true
-    override val name = "Tapastic"
+    override val name = "Tapas" // originally Tapastic
     override val baseUrl = "https://tapas.io"
+    override val id = 3825434541981130345
 
     // Popular
 
@@ -76,12 +135,7 @@ class Tapastic : ParsedHttpSource() {
     override fun searchMangaSelector() = "${popularMangaSelector()}, .search-item-wrap"
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         url = element.select(".item__thumb a, .title-section .title a").attr("href")
-        val browseTitle = element.select(".item__thumb img")
-        title = if (browseTitle != null) {
-            browseTitle.attr("alt")
-        } else {
-            element.select(".title-section .title a").text()
-        }
+        title = element.select(".item__thumb img").firstOrNull()?.attr("alt") ?: element.select(".title-section .title a").text()
         thumbnail_url = element.select(".item__thumb img, .thumb-wrap img").attr("src")
     }
 
@@ -104,16 +158,30 @@ class Tapastic : ParsedHttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        var document = response.asJsoup()
-        val baseUri = document.baseUri().substringBefore("?")
         val chapters = mutableListOf<SChapter>()
-        document.select(chapterListSelector()).map { chapters.add(chapterFromElement(it)) }
-        var nextPage = document.select(".paging__button--next:not(.disabled)")
-        while (!nextPage.isNullOrEmpty()) {
-            document = client.newCall(GET(baseUri + nextPage.attr("href"))).execute().asJsoup()
-            document.select(chapterListSelector()).map { chapters.add(chapterFromElement(it)) }
-            nextPage = document.select(".paging__button--next:not(.disabled)")
+
+        fun List<Element>.filterLocked(boolean: Boolean): List<Element> {
+            return if (boolean) this.filterNot { it.select("a").hasClass("js-locked") } else this
         }
+
+        // recursively build the chapter list
+        fun parseChapters(document: Document) {
+            document.select(chapterListSelector())
+                // filter out future releases
+                .filterNot { it.select("a").hasClass("js-coming-soon") }
+                .let { list ->
+                    // show/don't show locked chapters based on user's preferences
+                    if (chapterListPref() == "free") list.filterNot { it.select("a").hasClass("js-have-to-sign") }
+                        else list
+                }
+                .map { chapters.add(chapterFromElement(it)) }
+
+            document.select("a.paging__button--next").firstOrNull()?.let {
+                parseChapters(client.newCall(GET(it.attr("abs:href"), headers)).execute().asJsoup())
+            }
+        }
+
+        parseChapters(response.asJsoup())
         return chapters
     }
 
@@ -126,11 +194,8 @@ class Tapastic : ParsedHttpSource() {
             ""
         } + element.select(".info__title").text().trim()
 
-        url = if (lock) {
-            "locked"
-        } else {
-            element.select("a").first().attr("href")
-        }
+        setUrlWithoutDomain(element.select("a").attr("href"))
+
         chapter_number =
             element.select(".info__header").text().substringAfter("Episode")
                 .substringBefore("Early access").trim().toFloat()
@@ -145,14 +210,9 @@ class Tapastic : ParsedHttpSource() {
 
     // Pages
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        if (chapter.url == "locked") throw Exception("Chapter Locked. If logged in, refresh chapter list.")
-        return GET(baseUrl + chapter.url, headers)
-    }
-
-    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
-        document.select("img.content__img").forEach {
-            add(Page(size, "", if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src")))
+    override fun pageListParse(document: Document): List<Page> {
+        return document.select("img.content__img").mapIndexed { i, img ->
+            Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
         }
     }
 
