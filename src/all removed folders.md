@@ -25,3 +25,19 @@ dragonball_multiverse
 xkcd
 
 
+**non english**
+
+src/ar
+src/de
+src/es
+src/fr
+src/id
+src/it
+src/ja
+src/ko
+src/pt
+src/ru
+src/th
+src/tr
+src/vi
+src/zh

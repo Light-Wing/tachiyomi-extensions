@@ -72,7 +72,7 @@ abstract class MangaDex(
         .addNetworkInterceptor(rateLimitInterceptor)
         .build()
 
-    private fun clientBuilder(): OkHttpClient = clientBuilder(getShowR18())
+    private fun clientBuilder(): OkHttpClient = clientBuilder(getShowR18())//always = 0, means no r18
 
     private fun clientBuilder(r18Toggle: Int): OkHttpClient = network.client.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -94,7 +94,7 @@ abstract class MangaDex(
 
     private fun cookiesHeader(r18Toggle: Int): String {
         val cookies = mutableMapOf<String, String>()
-        cookies["mangadex_h_toggle"] = r18Toggle.toString()
+        cookies["mangadex_h_toggle"] = "0"//r18Toggle.toString()
         return buildCookies(cookies)
     }
 
@@ -182,7 +182,7 @@ abstract class MangaDex(
                     MangasPage(listOf(details), false)
                 }
         } else {
-            getSearchClient(filters).newCall(searchMangaRequest(page, query, filters))
+            getSearchClient(/*filters*/).newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
                 .map { response ->
                     searchMangaParse(response)
@@ -190,8 +190,9 @@ abstract class MangaDex(
         }
     }
 
-    private fun getSearchClient(filters: FilterList): OkHttpClient {
-        filters.forEach { filter ->
+    private fun getSearchClient(/*filters: FilterList*/): OkHttpClient {
+        /*
+                filters.forEach { filter ->
             when (filter) {
                 is R18 -> {
                     return when (filter.state) {
@@ -203,6 +204,7 @@ abstract class MangaDex(
                 }
             }
         }
+         */
         return clientBuilder()
     }
 
@@ -607,6 +609,7 @@ abstract class MangaDex(
     }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+/*
         val r18Pref = androidx.preference.ListPreference(screen.context).apply {
             key = SHOW_R18_PREF_Title
             title = SHOW_R18_PREF_Title
@@ -622,6 +625,7 @@ abstract class MangaDex(
                 preferences.edit().putInt(SHOW_R18_PREF, index).commit()
             }
         }
+ */
         val thumbsPref = androidx.preference.ListPreference(screen.context).apply {
             key = SHOW_THUMBNAIL_PREF_Title
             title = SHOW_THUMBNAIL_PREF_Title
@@ -663,14 +667,15 @@ abstract class MangaDex(
             }
         }
 
-        screen.addPreference(r18Pref)
+//        screen.addPreference(r18Pref)
         screen.addPreference(thumbsPref)
         screen.addPreference(serverPref)
         screen.addPreference(dataSaverPref)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val r18Pref = ListPreference(screen.context).apply {
+        /*
+                val r18Pref = ListPreference(screen.context).apply {
             key = SHOW_R18_PREF_Title
             title = SHOW_R18_PREF_Title
 
@@ -685,6 +690,7 @@ abstract class MangaDex(
                 preferences.edit().putInt(SHOW_R18_PREF, index).commit()
             }
         }
+         */
         val thumbsPref = ListPreference(screen.context).apply {
             key = SHOW_THUMBNAIL_PREF_Title
             title = SHOW_THUMBNAIL_PREF_Title
@@ -726,13 +732,13 @@ abstract class MangaDex(
             }
         }
 
-        screen.addPreference(r18Pref)
+//        screen.addPreference(r18Pref)
         screen.addPreference(thumbsPref)
         screen.addPreference(serverPref)
         screen.addPreference(dataSaverPref)
     }
 
-    private fun getShowR18(): Int = preferences.getInt(SHOW_R18_PREF, 0)
+    private fun getShowR18(): Int = 0//preferences.getInt(SHOW_R18_PREF, 0)
     private fun getShowThumbnail(): Int = preferences.getInt(SHOW_THUMBNAIL_PREF, 0)
     private fun getServer(): String {
         val default = SERVER_PREF_ENTRY_VALUES.first()
@@ -748,7 +754,7 @@ abstract class MangaDex(
     private class ContentList(contents: List<Tag>) : Filter.Group<Tag>("Content", contents)
     private class FormatList(formats: List<Tag>) : Filter.Group<Tag>("Format", formats)
     private class GenreList(genres: List<Tag>) : Filter.Group<Tag>("Genres", genres)
-    private class R18 : Filter.Select<String>("R18+", arrayOf("Default", "Show all", "Show only", "Show none"))
+//    private class R18 : Filter.Select<String>("R18+", arrayOf("Default", "Show all", "Show only", "Show none"))
     private class ScanGroup(name: String) : Filter.Text(name)
 
     private fun getDemographic() = listOf(
@@ -779,12 +785,12 @@ abstract class MangaDex(
     override fun getFilterList() = FilterList(
         TextField("Author", "author"),
         TextField("Artist", "artist"),
-        R18(),
+//        R18(),
         SortFilter(),
         Demographic(getDemographic()),
         PublicationStatus(getPublicationStatus()),
         OriginalLanguage(),
-        ContentList(getContentList()),
+//        ContentList(getContentList()),
         FormatList(getFormatList()),
         GenreList(getGenreList()),
         ThemeList(getThemeList()),
@@ -795,18 +801,20 @@ abstract class MangaDex(
         ScanGroup("Search for manga by scanlator group")
     )
 
+    /*
     private fun getContentList() = listOf(
         Tag("9", "Ecchi"),
         Tag("32", "Smut"),
         Tag("49", "Gore"),
         Tag("50", "Sexual Violence")
     ).sortedWith(compareBy { it.name })
+     */
 
     private fun getFormatList() = listOf(
         Tag("1", "4-koma"),
         Tag("4", "Award Winning"),
-        Tag("7", "Doujinshi"),
-        Tag("21", "Oneshot"),
+//        Tag("7", "Doujinshi"),
+//        Tag("21", "Oneshot"),
         Tag("36", "Long Strip"),
         Tag("42", "Adaptation"),
         Tag("43", "Anthology"),
@@ -824,23 +832,23 @@ abstract class MangaDex(
         Tag("8", "Drama"),
         Tag("10", "Fantasy"),
         Tag("13", "Historical"),
-        Tag("14", "Horror"),
+//        Tag("14", "Horror"),
         Tag("17", "Mecha"),
         Tag("18", "Medical"),
         Tag("20", "Mystery"),
         Tag("22", "Psychological"),
         Tag("23", "Romance"),
         Tag("25", "Sci-Fi"),
-        Tag("28", "Shoujo Ai"),
-        Tag("30", "Shounen Ai"),
+//        Tag("28", "Shoujo Ai"),
+//        Tag("30", "Shounen Ai"),
         Tag("31", "Slice of Life"),
         Tag("33", "Sports"),
         Tag("35", "Tragedy"),
-        Tag("37", "Yaoi"),
-        Tag("38", "Yuri"),
+//        Tag("37", "Yaoi"),
+//        Tag("38", "Yuri"),
         Tag("41", "Isekai"),
         Tag("51", "Crime"),
-        Tag("52", "Magical Girls"),
+//        Tag("52", "Magical Girls"),
         Tag("53", "Philosophical"),
         Tag("54", "Superhero"),
         Tag("55", "Thriller"),
@@ -849,8 +857,8 @@ abstract class MangaDex(
 
     private fun getThemeList() = listOf(
         Tag("6", "Cooking"),
-        Tag("11", "Gyaru"),
-        Tag("12", "Harem"),
+//        Tag("11", "Gyaru"),
+//        Tag("12", "Harem"),
         Tag("16", "Martial Arts"),
         Tag("19", "Music"),
         Tag("24", "School Life"),
@@ -858,34 +866,34 @@ abstract class MangaDex(
         Tag("40", "Video Games"),
         Tag("57", "Aliens"),
         Tag("58", "Animals"),
-        Tag("59", "Crossdressing"),
+//        Tag("59", "Crossdressing"),
         Tag("60", "Demons"),
         Tag("61", "Delinquents"),
-        Tag("62", "Genderswap"),
+//        Tag("62", "Genderswap"),
         Tag("63", "Ghosts"),
-        Tag("64", "Monster Girls"),
-        Tag("65", "Loli"),
+//        Tag("64", "Monster Girls"),
+//        Tag("65", "Loli"),
         Tag("66", "Magic"),
         Tag("67", "Military"),
         Tag("68", "Monsters"),
         Tag("69", "Ninja"),
-        Tag("70", "Office Workers"),
+//        Tag("70", "Office Workers"),
         Tag("71", "Police"),
         Tag("72", "Post-Apocalyptic"),
         Tag("73", "Reincarnation"),
-        Tag("74", "Reverse Harem"),
+//        Tag("74", "Reverse Harem"),
         Tag("75", "Samurai"),
-        Tag("76", "Shota"),
+//        Tag("76", "Shota"),
         Tag("77", "Survival"),
         Tag("78", "Time Travel"),
         Tag("79", "Vampires"),
         Tag("80", "Traditional Games"),
         Tag("81", "Virtual Reality"),
-        Tag("82", "Zombies"),
-        Tag("83", "Incest")
+        Tag("82", "Zombies")
+//        Tag("83", "Incest")
     ).sortedWith(compareBy { it.name })
 
-    private val GENRES = (getContentList() + getFormatList() + getGenreList() + getThemeList()).map { it.id to it.name }.toMap()
+    private val GENRES = (/*getContentList() + */getFormatList() + getGenreList() + getThemeList()).map { it.id to it.name }.toMap()
 
     companion object {
         private val WHITESPACE_REGEX = "\\s".toRegex()
