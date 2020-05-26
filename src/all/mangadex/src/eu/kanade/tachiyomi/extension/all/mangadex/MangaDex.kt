@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.support.v7.preference.ListPreference
 import android.support.v7.preference.PreferenceScreen
-import android.util.Log
 import com.github.salomonbrys.kotson.forEach
 import com.github.salomonbrys.kotson.get
 import com.github.salomonbrys.kotson.int
@@ -13,7 +12,6 @@ import com.github.salomonbrys.kotson.long
 import com.github.salomonbrys.kotson.nullString
 import com.github.salomonbrys.kotson.obj
 import com.github.salomonbrys.kotson.string
-import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -424,7 +422,7 @@ abstract class MangaDex(
 //        Log.e("mangadex", "check adult" + genres.toString())
 //        Log.e("mangadex", "mangaJson.get(genres)" + mangaJson.get("genres").toString())
 //        if (checkAdult(mangaJson)) {
-////            manga.url = "https://google.com"
+// //            manga.url = "https://google.com"
 //            manga.genre = "nsfw"
 //            val title = cleanString(mangaJson.get("title").string)
 //            manga.thumbnail_url = "https://fakeimg.pl/225x340/282828/eae0d0/?text=${title.replace(" ","%0A")}"
@@ -490,9 +488,9 @@ abstract class MangaDex(
         val chapterJson = json.getAsJsonObject("chapter")
         val chapters = mutableListOf<SChapter>()
 
-        if (checkAdult(mangaJson)) {
-            throw Exception("no chapters found (ext filter")
-        } else {
+//        if (checkAdult(mangaJson)) {
+//            throw Exception("no chapters found (ext filter")
+//        } else {
             // Skip chapters that don't match the desired language, or are future releases
             chapterJson?.forEach { key, jsonElement ->
                 val chapterElement = jsonElement.asJsonObject
@@ -501,8 +499,7 @@ abstract class MangaDex(
                 }
             }
             return chapters
-        }
-
+//        }
     }
 
     /**
@@ -1028,7 +1025,7 @@ abstract class MangaDex(
 //        Tag("83", "Incest")
 
          */
-        adultGenreNumberList.forEach{ adultGenreNumber ->
+        adultGenreNumberList.forEach { adultGenreNumber ->
             for (genre in genreFromElement) {
                 if (genre.asInt == adultGenreNumber) {
                     return true
