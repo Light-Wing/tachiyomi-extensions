@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.support.v7.preference.ListPreference
 import android.support.v7.preference.PreferenceScreen
+import android.util.Log
 import com.github.salomonbrys.kotson.forEach
 import com.github.salomonbrys.kotson.get
 import com.github.salomonbrys.kotson.int
@@ -12,6 +13,7 @@ import com.github.salomonbrys.kotson.long
 import com.github.salomonbrys.kotson.nullString
 import com.github.salomonbrys.kotson.obj
 import com.github.salomonbrys.kotson.string
+import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -72,7 +74,7 @@ abstract class MangaDex(
         .addNetworkInterceptor(rateLimitInterceptor)
         .build()
 
-    private fun clientBuilder(): OkHttpClient = clientBuilder(getShowR18())//always = 0, means no r18
+    private fun clientBuilder(): OkHttpClient = clientBuilder(getShowR18()) // always = 0, means no r18
 
     private fun clientBuilder(r18Toggle: Int): OkHttpClient = network.client.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -94,7 +96,7 @@ abstract class MangaDex(
 
     private fun cookiesHeader(r18Toggle: Int): String {
         val cookies = mutableMapOf<String, String>()
-        cookies["mangadex_h_toggle"] = "0"//r18Toggle.toString()
+        cookies["mangadex_h_toggle"] = "0" // r18Toggle.toString()
         return buildCookies(cookies)
     }
 
@@ -145,7 +147,6 @@ abstract class MangaDex(
             manga.title = it.text().trim()
         }
         manga.thumbnail_url = formThumbUrl(manga.url)
-
         return manga
     }
 
@@ -410,12 +411,25 @@ abstract class MangaDex(
         } else {
             manga.status = parseStatus(status)
         }
-
-        val genres = (if (mangaJson.get("hentai").int == 1) listOf("Hentai") else listOf()) +
-            mangaJson.get("genres").asJsonArray.mapNotNull { GENRES[it.toString()] } +
-            mangaJson.get("lang_name").string
+//
+        val genres = if (checkAdult(mangaJson))
+            listOf("nsfw")
+            else {
+                (if (mangaJson.get("hentai").int == 1) listOf("Hentai") else listOf()) +
+                mangaJson.get("genres").asJsonArray.mapNotNull { GENRES[it.toString()] } +
+                mangaJson.get("lang_name").string
+            }
         manga.genre = genres.joinToString(", ")
 
+//        Log.e("mangadex", "check adult" + genres.toString())
+//        Log.e("mangadex", "mangaJson.get(genres)" + mangaJson.get("genres").toString())
+//        if (checkAdult(mangaJson)) {
+////            manga.url = "https://google.com"
+//            manga.genre = "nsfw"
+//            val title = cleanString(mangaJson.get("title").string)
+//            manga.thumbnail_url = "https://fakeimg.pl/225x340/282828/eae0d0/?text=${title.replace(" ","%0A")}"
+//
+//        }
         return manga
     }
 
@@ -476,14 +490,19 @@ abstract class MangaDex(
         val chapterJson = json.getAsJsonObject("chapter")
         val chapters = mutableListOf<SChapter>()
 
-        // Skip chapters that don't match the desired language, or are future releases
-        chapterJson?.forEach { key, jsonElement ->
-            val chapterElement = jsonElement.asJsonObject
-            if (shouldKeepChapter(chapterElement, now)) {
-                chapters.add(chapterFromJson(key, chapterElement, finalChapterNumber, status))
+        if (checkAdult(mangaJson)) {
+            throw Exception("no chapters found (ext filter")
+        } else {
+            // Skip chapters that don't match the desired language, or are future releases
+            chapterJson?.forEach { key, jsonElement ->
+                val chapterElement = jsonElement.asJsonObject
+                if (shouldKeepChapter(chapterElement, now)) {
+                    chapters.add(chapterFromJson(key, chapterElement, finalChapterNumber, status))
+                }
             }
+            return chapters
         }
-        return chapters
+
     }
 
     /**
@@ -738,7 +757,7 @@ abstract class MangaDex(
         screen.addPreference(dataSaverPref)
     }
 
-    private fun getShowR18(): Int = 0//preferences.getInt(SHOW_R18_PREF, 0)
+    private fun getShowR18(): Int = 0 // preferences.getInt(SHOW_R18_PREF, 0)
     private fun getShowThumbnail(): Int = preferences.getInt(SHOW_THUMBNAIL_PREF, 0)
     private fun getServer(): String {
         val default = SERVER_PREF_ENTRY_VALUES.first()
@@ -808,7 +827,7 @@ abstract class MangaDex(
         Tag("49", "Gore"),
         Tag("50", "Sexual Violence")
     ).sortedWith(compareBy { it.name })
-     */
+    */
 
     private fun getFormatList() = listOf(
         Tag("1", "4-koma"),
@@ -892,6 +911,132 @@ abstract class MangaDex(
         Tag("82", "Zombies")
 //        Tag("83", "Incest")
     ).sortedWith(compareBy { it.name })
+
+    private fun getContentList_notFiltered() = listOf(
+        Tag("9", "Ecchi"),
+        Tag("32", "Smut"),
+        Tag("49", "Gore"),
+        Tag("50", "Sexual Violence")
+    ).sortedWith(compareBy { it.name })
+    private fun getFormatList_notFiltered() = listOf(
+        Tag("1", "4-koma"),
+        Tag("4", "Award Winning"),
+//        Tag("7", "Doujinshi"),
+//        Tag("21", "Oneshot"),
+        Tag("36", "Long Strip"),
+        Tag("42", "Adaptation"),
+        Tag("43", "Anthology"),
+        Tag("44", "Web Comic"),
+        Tag("45", "Full Color"),
+        Tag("46", "User Created"),
+        Tag("47", "Official Colored"),
+        Tag("48", "Fan Colored")
+    ).sortedWith(compareBy { it.name })
+    private fun getGenreList_notFiltered() = listOf(
+        Tag("2", "Action"),
+        Tag("3", "Adventure"),
+        Tag("5", "Comedy"),
+        Tag("8", "Drama"),
+        Tag("10", "Fantasy"),
+        Tag("13", "Historical"),
+//        Tag("14", "Horror"),
+        Tag("17", "Mecha"),
+        Tag("18", "Medical"),
+        Tag("20", "Mystery"),
+        Tag("22", "Psychological"),
+        Tag("23", "Romance"),
+        Tag("25", "Sci-Fi"),
+//        Tag("28", "Shoujo Ai"),
+//        Tag("30", "Shounen Ai"),
+        Tag("31", "Slice of Life"),
+        Tag("33", "Sports"),
+        Tag("35", "Tragedy"),
+//        Tag("37", "Yaoi"),
+//        Tag("38", "Yuri"),
+        Tag("41", "Isekai"),
+        Tag("51", "Crime"),
+//        Tag("52", "Magical Girls"),
+        Tag("53", "Philosophical"),
+        Tag("54", "Superhero"),
+        Tag("55", "Thriller"),
+        Tag("56", "Wuxia")
+    ).sortedWith(compareBy { it.name })
+    private fun getThemeList_notFiltered() = listOf(
+        Tag("6", "Cooking"),
+//        Tag("11", "Gyaru"),
+//        Tag("12", "Harem"),
+        Tag("16", "Martial Arts"),
+        Tag("19", "Music"),
+        Tag("24", "School Life"),
+        Tag("34", "Supernatural"),
+        Tag("40", "Video Games"),
+        Tag("57", "Aliens"),
+        Tag("58", "Animals"),
+//        Tag("59", "Crossdressing"),
+        Tag("60", "Demons"),
+        Tag("61", "Delinquents"),
+//        Tag("62", "Genderswap"),
+        Tag("63", "Ghosts"),
+//        Tag("64", "Monster Girls"),
+//        Tag("65", "Loli"),
+        Tag("66", "Magic"),
+        Tag("67", "Military"),
+        Tag("68", "Monsters"),
+        Tag("69", "Ninja"),
+//        Tag("70", "Office Workers"),
+        Tag("71", "Police"),
+        Tag("72", "Post-Apocalyptic"),
+        Tag("73", "Reincarnation"),
+//        Tag("74", "Reverse Harem"),
+        Tag("75", "Samurai"),
+//        Tag("76", "Shota"),
+        Tag("77", "Survival"),
+        Tag("78", "Time Travel"),
+        Tag("79", "Vampires"),
+        Tag("80", "Traditional Games"),
+        Tag("81", "Virtual Reality"),
+        Tag("82", "Zombies")
+//        Tag("83", "Incest")
+    ).sortedWith(compareBy { it.name })
+
+    private fun checkAdult(mangaJson: JsonObject): Boolean {
+
+        if (mangaJson.get("hentai").int == 1) return true
+
+        val genreFromElement = mangaJson.get("genres").asJsonArray
+        val adultGenreNumberList = arrayOf(7, 9, 28, 30, 32, 37, 38, 50, 59, 65, 74, 76, 83)
+        /*
+//        Tag("7", "Doujinshi"),
+//        Tag("9", "Ecchi"),
+//        Tag("11", "Gyaru"),
+//        Tag("12", "Harem"),
+//        Tag("28", "Shoujo Ai"),
+//        Tag("30", "Shounen Ai"),
+//        Tag("32", "Smut"),
+//        Tag("37", "Yaoi"),
+//        Tag("38", "Yuri"),
+//        Tag("49", "Gore"),
+//        Tag("50", "Sexual Violence")
+//        Tag("52", "Magical Girls"),
+//        Tag("59", "Crossdressing"),
+//        Tag("62", "Genderswap"),
+//        Tag("64", "Monster Girls"),
+//        Tag("65", "Loli"),
+//        Tag("70", "Office Workers"),
+//        Tag("74", "Reverse Harem"),
+//        Tag("76", "Shota"),
+//        Tag("83", "Incest")
+
+         */
+        adultGenreNumberList.forEach{ adultGenreNumber ->
+            for (genre in genreFromElement) {
+                if (genre.asInt == adultGenreNumber) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
 
     private val GENRES = (/*getContentList() + */getFormatList() + getGenreList() + getThemeList()).map { it.id to it.name }.toMap()
 
