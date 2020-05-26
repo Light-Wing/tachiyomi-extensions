@@ -7,7 +7,7 @@ build/
 release/
 .idea/
 *.iml
-apk/
+
 gen
 src/ar
 src/de
