@@ -7,7 +7,6 @@ build/
 release/
 .idea/
 *.iml
-repo/
 apk/
 gen
 src/ar
