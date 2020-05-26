@@ -123,7 +123,8 @@ class MadaraFactory : SourceFactory {
         EinherjarScan(),
         KnightNoScanlation(),
         DoujinYosh(),
-        Manga347()
+        Manga347(),
+        RenaScans()
         // Removed by request of site owner
         // EarlyManga(),
         // MangaGecesi(),
@@ -282,7 +283,7 @@ class Milftoon : Madara("Milftoon", "https://milftoon.xxx", "en") {
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page/?m_orderby=latest", headers)
 }
 
-class Hiperdex : Madara("Hiperdex", "https://hiperdex.info", "en") {
+class Hiperdex : Madara("Hiperdex", "https://hiperdex.com", "en") {
     override fun getGenreList() = listOf(
         Genre("Adult", "adult"),
         Genre("Action", "action"),
@@ -910,3 +911,4 @@ class DoujinYosh : Madara("DoujinYosh", "https://doujinyosh.work", "id") {
 class Manga347 : Madara("Manga347", "https://manga347.com", "en", SimpleDateFormat("d MMM, yyyy", Locale.US)) {
     override val pageListParseSelector = "li.blocks-gallery-item"
 }
+class RenaScans : Madara("Renascence Scans (Renascans)", "https://new.renascans.com", "en", SimpleDateFormat("dd/MM/yyyy", Locale.US))
